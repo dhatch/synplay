@@ -19,7 +19,7 @@ int ByteBuffer::get_short(int16_t* dst) {
 }
 
 std::size_t ByteBuffer::get_nshorts(int16_t* dst, std::size_t size) {
-  for(int i = 0; i < size; i++) {
+  for (int i = 0; i < size; i++) {
     int r = get_short(dst + i);
     if (r == 0) {
       return i;
@@ -28,11 +28,6 @@ std::size_t ByteBuffer::get_nshorts(int16_t* dst, std::size_t size) {
   return size;
 }
 
-std::size_t ByteBuffer::remaining() {
-  return size_ - read_;
-}
+std::size_t ByteBuffer::remaining() { return size_ - read_; }
 
-std::size_t ByteBuffer::size() const {
-  return size_;
-}
-
+std::size_t ByteBuffer::size() const { return size_; }

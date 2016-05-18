@@ -14,7 +14,7 @@ struct MConnection {
   asio::deadline_timer *timer;
   MConnectionState state;
 
-  MConnection() : state(NAKED), timer(nullptr), attempts(0), sync_rounds(0) {};
+  MConnection() : state(NAKED), timer(nullptr), attempts(0), sync_rounds(0){};
 };
 
 #endif

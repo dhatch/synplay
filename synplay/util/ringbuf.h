@@ -3,22 +3,23 @@
 
 template <typename T>
 class RingBuffer {
-  public:
-    RingBuffer(int cap) : capacity(cap) {
-      read_head = 0;
-      write_head = 0;
-      data = new T[cap];
-    }
-    int putn(T* data, int n);
-    int put(T datum);
-    int getn(T* data, int n);
-    bool empty();
-    T get();
-  private:
-    T* data;
-    int read_head;
-    int write_head;
-    int capacity;
+ public:
+  RingBuffer(int cap) : capacity(cap) {
+    read_head = 0;
+    write_head = 0;
+    data = new T[cap];
+  }
+  int putn(T* data, int n);
+  int put(T datum);
+  int getn(T* data, int n);
+  bool empty();
+  T get();
+
+ private:
+  T* data;
+  int read_head;
+  int write_head;
+  int capacity;
 };
 
 template <class T>
@@ -28,14 +29,13 @@ int RingBuffer<T>::put(T datum) {
   }
   data[write_head] = datum;
   write_head++;
-  if (write_head == capacity)
-    write_head = 0;
+  if (write_head == capacity) write_head = 0;
   return 1;
 }
 
 template <class T>
 int RingBuffer<T>::putn(T* data, int n) {
-  for(int i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++) {
     int result = put(data[i]);
     if (result == 0) {
       return i;
@@ -64,7 +64,7 @@ T RingBuffer<T>::get() {
 
 template <class T>
 int RingBuffer<T>::getn(T* buffer, int n) {
-  for(int i = 0; i< n; i++) {
+  for (int i = 0; i < n; i++) {
     buffer[i] = get();
     if (buffer[i] == NULL) {
       return i;

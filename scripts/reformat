@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+set -aeu
+
+# Must be invoked with -f to reformat all.
+
+NOFORCE=true
+
+while getopts "f" OPTION
+do
+  case $OPTION in
+    f)
+      NOFORCE=false
+  esac
+done
+
+if $NOFORCE;
+then
+  exit 1;
+fi
+
+# Find sources
+
+pushd `dirname $0` > /dev/null
+SCRIPTPATH=`pwd`
+popd > /dev/null
+
+SOURCE_DIR=$SCRIPTPATH/..
+
+SOURCES=$(find ${SOURCE_DIR} '(' '-name' '*.cc' '-or' '-name' '*.h' ')' '-and' '-not' '-path' '*lib*')
+
+clang-format -i ${SOURCES}
+
+echo $SOURCES

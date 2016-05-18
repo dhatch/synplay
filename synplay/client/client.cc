@@ -12,22 +12,19 @@
 
 static int received = 0;
 
-static int pacallback(const void *inputBuffer, void* outputBuffer,
-    unsigned long framesPerBuffer,
-    const PaStreamCallbackTimeInfo* timeInfo,
-    PaStreamCallbackFlags statusFlags,
-    void *userData) {
+static int pacallback(const void *inputBuffer, void *outputBuffer,
+                      unsigned long framesPerBuffer,
+                      const PaStreamCallbackTimeInfo *timeInfo,
+                      PaStreamCallbackFlags statusFlags, void *userData) {
+  int16_t *audio_out = (int16_t *)outputBuffer;
 
-  int16_t *audio_out = (int16_t*) outputBuffer;
+  streamState *s_state = (streamState *)userData;
 
-  streamState * s_state = (streamState *) userData;
-
-  std::deque<MPacket *> * packet_buffer = s_state->packet_buffer;
+  std::deque<MPacket *> *packet_buffer = s_state->packet_buffer;
 
   PaTime play_time = timeInfo->outputBufferDacTime;
 
-  for(unsigned long i = 0; i < framesPerBuffer; i++) {
-
+  for (unsigned long i = 0; i < framesPerBuffer; i++) {
     // Don't play anything if there are no packets to play
     if (packet_buffer->empty()) {
       *(audio_out++) = 0;
@@ -35,7 +32,7 @@ static int pacallback(const void *inputBuffer, void* outputBuffer,
       continue;
     }
 
-    MPacket * mp = packet_buffer->front();
+    MPacket *mp = packet_buffer->front();
 
     // Make sure timestamps are monotonically increasing
     // (discard packets that have a timestamp less than
@@ -46,7 +43,6 @@ static int pacallback(const void *inputBuffer, void* outputBuffer,
     } else {
       s_state->last_timestamp = mp->get_pa_timestamp();
     }
-
 
     // Don't play if it's not time to play this packet yet
     if (mp->get_pa_timestamp() >= play_time) {
@@ -64,7 +60,6 @@ static int pacallback(const void *inputBuffer, void* outputBuffer,
 
     *(audio_out++) = mp->get_int16_t();
     *(audio_out++) = mp->get_int16_t();
-
   }
 
   return paContinue;
@@ -73,35 +68,32 @@ static int pacallback(const void *inputBuffer, void* outputBuffer,
 PaTime Client::get_pa_time(mtime_t master_time) {
   // Convert a master clock millisecond timestamp
   // to the equivalent Port Audio stream timestamp
-  return (PaTime) (master_time + offset + pa_offset) / 1000.0;
+  return (PaTime)(master_time + offset + pa_offset) / 1000.0;
 }
 
 void Client::receive() {
   socket.async_receive_from(
-    asio::buffer(data, LEN), sender_endpoint,
-    [this](std::error_code ec, std::size_t bytes_recvd)
-    {
+      asio::buffer(data, LEN), sender_endpoint,
+      [this](std::error_code ec, std::size_t bytes_recvd) {
 
-      // immediately grab the receipt time
-      mtime_t to_recvd = get_millisecond_time();
+        // immediately grab the receipt time
+        mtime_t to_recvd = get_millisecond_time();
 
-      if (!ec && bytes_recvd > 0)
-      {
-        Packet *packet = Packet::unpack(data,bytes_recvd);
-        if (packet != nullptr) {
-          switch (packet->get_type()){
-            case PacketType::TIME:
-              receive_timesync(static_cast<TPacket *> (packet),to_recvd);
-              break;
-            case PacketType::DATA:
-              receive_data(static_cast<MPacket *> (packet));
-              break;
+        if (!ec && bytes_recvd > 0) {
+          Packet *packet = Packet::unpack(data, bytes_recvd);
+          if (packet != nullptr) {
+            switch (packet->get_type()) {
+              case PacketType::TIME:
+                receive_timesync(static_cast<TPacket *>(packet), to_recvd);
+                break;
+              case PacketType::DATA:
+                receive_data(static_cast<MPacket *>(packet));
+                break;
+            }
           }
+          receive();
         }
-        receive();
-      }
-    }
-  );
+      });
 }
 
 void Client::receive_data(MPacket *mpacket) {
@@ -110,7 +102,6 @@ void Client::receive_data(MPacket *mpacket) {
   mpacket->set_pa_timestamp(get_pa_time(mpacket->get_timestamp()));
   s_state->packet_buffer->push_back(mpacket);
   // mpacket->print();
-
 }
 
 void Client::receive_timesync(TPacket *tpacket, mtime_t to_recvd) {
@@ -129,20 +120,23 @@ void Client::receive_timesync(TPacket *tpacket, mtime_t to_recvd) {
     std::cerr << "Stream time: " << pa_start_time << std::endl;
     mtime_t system_start_time = get_millisecond_time();
     std::cerr << "System time: " << system_start_time << std::endl;
-    pa_offset = ((mtime_t) (pa_start_time * 1000)) - system_start_time;
+    pa_offset = ((mtime_t)(pa_start_time * 1000)) - system_start_time;
     std::cerr << "pa_offset: " << pa_offset << std::endl;
 
     // Apply outlier detection to NTP samples.
-    std::pair<double, double> mean_stddev = calculate_mean_stddev(offset_samples);
+    std::pair<double, double> mean_stddev =
+        calculate_mean_stddev(offset_samples);
     double mean = mean_stddev.first;
     double stddev = mean_stddev.second;
-    std::cerr << "sample mean: " << mean << " and std dev: " << stddev << std::endl;
+    std::cerr << "sample mean: " << mean << " and std dev: " << stddev
+              << std::endl;
     std::vector<double> cleaned_samples(offset_samples.size());
     // Throw out any samples that are more than OUTLIER_THRESHOLD away from the
     // mean
-    auto end = std::copy_if(offset_samples.begin(), offset_samples.end(),
-        cleaned_samples.begin(), [mean, stddev](double value) {
-          return stddev == 0 || fabs(value - mean) < OUTLIER_THRESHOLD*stddev;
+    auto end = std::copy_if(
+        offset_samples.begin(), offset_samples.end(), cleaned_samples.begin(),
+        [mean, stddev](double value) {
+          return stddev == 0 || fabs(value - mean) < OUTLIER_THRESHOLD * stddev;
         });
 
     std::size_t n_samples = std::distance(cleaned_samples.begin(), end);
@@ -151,23 +145,21 @@ void Client::receive_timesync(TPacket *tpacket, mtime_t to_recvd) {
       offset = mean;
     }
 
-    std::cerr << "setting master/client offset: " << offset << " after " <<
-      offset_samples.size() << " rounds. used " << n_samples << " samples."
-      << std::endl;
+    std::cerr << "setting master/client offset: " << offset << " after "
+              << offset_samples.size() << " rounds. used " << n_samples
+              << " samples." << std::endl;
     offset_samples.clear();
   }
 
   // and send the reply
-  socket.async_send_to(
-    asio::buffer(tpacket->pack()), sender_endpoint,
-    [this](std::error_code, std::size_t) {
-      // reply sent
-    }
-  );
+  socket.async_send_to(asio::buffer(tpacket->pack()), sender_endpoint,
+                       [this](std::error_code, std::size_t) {
+                         // reply sent
+                       });
 }
 
-Client::Client(asio::io_service& io_service, uint16_t p) : port(p),
-  socket(io_service, udp::endpoint(udp::v4(), p)) {
+Client::Client(asio::io_service &io_service, uint16_t p)
+    : port(p), socket(io_service, udp::endpoint(udp::v4(), p)) {
   std::cout << "Listening on " << port << std::endl;
   s_state = new streamState(100);
 }
@@ -180,12 +172,12 @@ void Client::start() {
   /* Set up Port Audio */
   PaError err = Pa_Initialize();
   if (err != paNoError) {
-    fprintf( stderr, "An error occured while initializing the portaudio stream\n" );
+    fprintf(stderr,
+            "An error occured while initializing the portaudio stream\n");
     Pa_Terminate();
-    fprintf( stderr, "Error number: %d\n", err );
-    fprintf( stderr, "Error message: %s\n", Pa_GetErrorText( err ) );
+    fprintf(stderr, "Error number: %d\n", err);
+    fprintf(stderr, "Error message: %s\n", Pa_GetErrorText(err));
     return;
-
   }
 
   // Determine Device Index
@@ -203,9 +195,10 @@ void Client::start() {
     std::cerr << "JACK not found" << std::endl;
   }
 
-  const PaDeviceInfo * deviceInfo = Pa_GetDeviceInfo(device_idx);
+  const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(device_idx);
   latency = deviceInfo->defaultLowOutputLatency;
-  std::cerr << "Device sample rate: " << deviceInfo->defaultSampleRate << std::endl;
+  std::cerr << "Device sample rate: " << deviceInfo->defaultSampleRate
+            << std::endl;
 
   PaStreamParameters output_parameters;
   output_parameters.device = device_idx;
@@ -215,16 +208,16 @@ void Client::start() {
   output_parameters.hostApiSpecificStreamInfo = NULL;
 
   /* No input, 2 stereo out */
-  err = Pa_OpenStream(&stream, NULL, &output_parameters,
-      SAMPLE_RATE, 64, paNoFlag, pacallback, s_state);
+  err = Pa_OpenStream(&stream, NULL, &output_parameters, SAMPLE_RATE, 64,
+                      paNoFlag, pacallback, s_state);
   if (err != paNoError) {
-    fprintf( stderr, "An error occured while opening the portaudio stream\n" );
+    fprintf(stderr, "An error occured while opening the portaudio stream\n");
     goto error;
   }
 
   err = Pa_StartStream(stream);
   if (err != paNoError) {
-    fprintf( stderr, "An error occured while starting the portaudio stream\n" );
+    fprintf(stderr, "An error occured while starting the portaudio stream\n");
     goto error;
   }
 
@@ -232,17 +225,14 @@ void Client::start() {
 
   receive();
 
-  //for (;;) {}
-  //Pa_StopStream(stream);
-  //Pa_CloseStream(stream);
-  //Pa_Terminate();
+  // for (;;) {}
+  // Pa_StopStream(stream);
+  // Pa_CloseStream(stream);
+  // Pa_Terminate();
   return;
 error:
   Pa_Terminate();
-  fprintf( stderr, "Error number: %d\n", err );
-  fprintf( stderr, "Error message: %s\n", Pa_GetErrorText( err ) );
+  fprintf(stderr, "Error number: %d\n", err);
+  fprintf(stderr, "Error message: %s\n", Pa_GetErrorText(err));
   return;
-
 }
-
-

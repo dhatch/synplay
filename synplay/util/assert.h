@@ -13,8 +13,7 @@ inline void PANIC(const char* err) {
  * Confirm that the condition is true.
  */
 inline void check_or_die(bool cond, const char* err = "") {
-  if (!cond)
-    PANIC(err);
+  if (!cond) PANIC(err);
 }
 
 #endif
